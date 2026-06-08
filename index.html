@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تطبيق رتّل للمتابعة</title>
+    <link href="https://fonts.googleapis.com/css2?family=Amiri+Quran&family=Tajawal:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
+    
+    <style>
+        :root { 
+            --gold-light: #f1dfae; --gold-antique: #c5a059; --gold-deep: #b08c45;
+            --emerald-deep: #062b11; --emerald-bg: #093f19; --error-red: #d32f2f;
+            --tajweed-green: #388e3c; --hifz-yellow: #fbc02d; --text-light: #f4f1ea;
+            --card-bg: rgba(255, 255, 255, 0.9); 
+            --text-color: #000;
+        }
+
+        body { 
+            font-family: 'Tajawal', sans-serif; 
+            background: radial-gradient(circle at center, var(--emerald-bg) 0%, var(--emerald-deep) 100%);
+            margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 100vh;
+        }
+
+        .app-container { 
+            max-width: 480px; width: 100%; 
+            background: var(--card-bg);
+            backdrop-filter: blur(15px); 
+            border-radius: 30px; 
+            box-shadow: 0 25px 50px rgba(0,0,0,0.5); 
+            overflow: hidden; position: relative;
+        }
+
+        header { 
+            background: linear-gradient(135deg, rgba(6, 43, 17, 0.9), rgba(9, 63, 25, 0.9)); 
+            color: var(--gold-light); padding: 25px 20px; border-bottom: 3px solid var(--gold-antique); text-align: center;
+        }
+
+        header h1 { font-family: 'Amiri Quran', serif; margin: 0; font-size: 36px; }
+        
+        .score-panel { display: flex; justify-content: center; gap: 15px; margin-top: 15px; }
+        #liveScore {
+            font-size: 15px; background: rgba(0,0,0,0.3); padding: 6px 12px; 
+            border-radius: 20px; border: 1px solid var(--gold-antique); color: var(--gold-light); font-weight: bold;
+        }
+
+        .content { padding: 25px; text-align: right; color: var(--text-color); }
+        label { display: block; margin-top: 15px; font-weight: bold; color: var(--gold-deep); font-size: 14px; }
+
+        input, textarea, select { 
+            width: 100%; padding: 12px; margin-top: 8px; 
+            border: 1px solid rgba(190, 150, 80, 0.4); 
+            border-radius: 12px; font-family: 'Tajawal'; box-sizing: border-box; 
+            background: rgba(0, 0, 0, 0.03); color: var(--text-color);
+            outline: none; transition: 0.3s;
+        }
+        input:focus, textarea:focus, select:focus { border-color: var(--gold-antique); background: #fff; }
+
+        .range-container { display: flex; gap: 10px; }
+
+        .quran-box { 
+            background: #fffcf2; border: 2px solid var(--gold-light); 
+            padding: 20px; border-radius: 20px; margin-top: 15px; 
+            min-height: 120px; max-height: 300px; overflow-y: auto; text-align: center; line-height: 2.3; 
+            font-family: 'Amiri Quran', serif; font-size: 24px; color: #1a1a1a;
+        }
+
+        .word { display: inline-block; margin: 0 3px; padding: 2px 5px; border-radius: 6px; cursor: pointer; transition: 0.2s; }
+        .t-1 { background-color: var(--tajweed-green) !important; color: white !important; } 
+        .t-2 { background-color: var(--error-red) !important; color: white !important; } 
+        .t-3 { background-color: var(--hifz-yellow) !important; color: black !important; } 
+
+        .btn-add-surah {
+            background: rgba(197, 160, 89, 0.15); border: 1px dashed var(--gold-antique);
+            color: var(--text-color); width: 100%; padding: 12px; border-radius: 12px;
+            cursor: pointer; font-weight: bold; margin-top: 15px; font-family: 'Tajawal';
+        }
+
+        .summary-box { background: rgba(0,0,0,0.04); border: 1px solid rgba(0,0,0,0.1); padding: 15px; border-radius: 12px; margin-top: 15px; }
+        .summary-box ul { padding-right: 20px; margin: 8px 0 0 0; font-size: 14px; }
+
+        .btn-send { 
+            background: linear-gradient(135deg, var(--gold-antique), var(--gold-deep)); 
+            color: var(--emerald-deep); border: none; padding: 16px; border-radius: 15px; 
+            width: 100%; cursor: pointer; font-size: 18px; font-weight: bold; margin-top: 20px;
+            box-shadow: 0 8px 15px rgba(0,0,0,0.1); font-family: 'Tajawal';
+        }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <header>
+        <h1>رتّل</h1>
+        <p style="margin: 10px 0 0 0; font-size: 18px; font-family: 'Amiri Quran', serif;">خَيْرُكُمْ مَنْ تَعَلَّمَ الْقُرْآنَ وَعَلَّمَهُ</p>
+        <div class="score-panel">
+            <div id="liveScore">💯 الدرجة: 100</div>
+        </div>
+    </header>
+
+    <div class="content">
+        <label>👤 اسم الطالب:</label>
+        <input type="text" id="studentName" placeholder="أدخل اسم الطالب">
+
+        <label>📖 ابحث عن السورة:</label>
+        <div style="position:relative">
+            <!-- محرك البحث الجديد باستخدام القائمة المنسدلة المدمجة (يظهر فور كتابة أي حرف) -->
+            <input type="text" id="surahSearch" list="surahsData" placeholder="اكتب اسم السورة أو اختر من القائمة..." oninput="checkSurahSelection()">
+            <datalist id="surahsData"></datalist>
+        </div>
+
+        <div id="rangeSelector" style="display:none">
+            <div class="range-container">
+                <div style="flex:1">
+                    <label>من آية:</label>
+                    <select id="startAyah" onchange="updateView()"></select>
+                </div>
+                <div style="flex:1">
+                    <label>إلى آية:</label>
+                    <select id="endAyah" onchange="updateView()"></select>
+                </div>
+            </div>
+        </div>
+
+        <div id="quranContainer" class="quran-box" onclick="handleInteraction(event)">
+            اختر سورة لبدء التسميع..
+        </div>
+        
+        <!-- دليل المعلم للأخطاء -->
+        <div style="text-align:center; font-size:13px; margin-top:10px; font-weight:bold; color:var(--text-color);">
+            💡 ضغطة: <span style="color:var(--tajweed-green)">🟢 تجويد (-1)</span> | ضغطتان: <span style="color:var(--error-red)">🔴 تشكيل (-4)</span> | 3 ضغطات: <span style="color:var(--hifz-yellow)">🟡 حفظ (-2)</span>
+        </div>
+
+        <!-- التعديل هنا: إضافة تقييم السورة -->
+        <label>⭐ تقييم تسميع السورة:</label>
+        <select id="surahEvaluation" style="margin-bottom: 10px;">
+            <option value="ممتاز">ممتاز</option>
+            <option value="مقبول">مقبول</option>
+            <option value="إعادة">إعادة</option>
+        </select>
+
+        <button class="btn-add-surah" onclick="addSurahToSession()">➕ إضافة هذه السورة للتقرير</button>
+
+        <div id="sessionSummary" class="summary-box" style="display:none;">
+            <label style="margin-top: 0;">السور التي تم تسميعها:</label>
+            <ul id="surahList"></ul>
+        </div>
+
+        <label>📝 ملاحظات إضافية:</label>
+        <textarea id="notes" rows="2" placeholder="اكتب ملاحظاتك هنا..."></textarea>
+
+        <label>📚 وظيفة الدرس القادم:</label>
+        <input type="text" id="nextLesson" placeholder="مثال: مراجعة سورة البقرة">
+
+        <button class="btn-send" onclick="finalSend()">إرسال التقرير النهائي عبر واتساب 🚀</button>
+    </div>
+</div>
+
+<script>
+let allSurahs = [], currentAyahs = [], sessionData = [];
+let currentSurahName = "", currentScore = 100;
+
+// نظام الصوت الفوري للضغطات
+const playSound = (freq) => {
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = "sine"; osc.frequency.setValueAtTime(freq, ctx.currentTime);
+  gain.gain.setValueAtTime(0.1, ctx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
+  osc.connect(gain); gain.connect(ctx.destination);
+  osc.start(); osc.stop(ctx.currentTime + 0.1);
+};
+
+// جلب السور من السيرفر وتعبئة القائمة المنسدلة الذكية
+async function fetchSurahs() {
+  const res = await fetch("https://api.alquran.cloud/v1/surah");
+  const data = await res.json();
+  allSurahs = data.data;
+  
+  const datalist = document.getElementById("surahsData");
+  datalist.innerHTML = allSurahs.map(s => `<option value="${s.name}">`).join("");
+}
+fetchSurahs();
+
+// دالة فحص الاختيار التلقائي للسورة من القائمة
+function checkSurahSelection() {
+  const val = document.getElementById("surahSearch").value;
+  const foundSurah = allSurahs.find(s => s.name === val);
+  
+  if(foundSurah) {
+      selectSurah(foundSurah.number, foundSurah.name);
+  }
+}
+
+async function selectSurah(num, name) {
+  currentSurahName = name;
+
+  const res = await fetch(`https://api.alquran.cloud/v1/surah/${num}`);
+  const data = await res.json();
+  currentAyahs = data.data.ayahs;
+
+  const startSelect = document.getElementById("startAyah");
+  const endSelect = document.getElementById("endAyah");
+  const options = currentAyahs.map((a) => `<option value="${a.numberInSurah}">${a.numberInSurah}</option>`).join("");
+  startSelect.innerHTML = options; endSelect.innerHTML = options;
+  endSelect.value = currentAyahs.length;
+
+  document.getElementById("rangeSelector").style.display = "block";
+  currentScore = 100;
+  updateScoreUI(); updateView();
+}
+
+function updateView() {
+  const start = parseInt(document.getElementById("startAyah").value) - 1;
+  const end = parseInt(document.getElementById("endAyah").value);
+  const container = document.getElementById("quranContainer");
+
+  let html = "";
+  currentAyahs.slice(start, end).forEach((ayah) => {
+    ayah.text.split(" ").forEach((w) => { if(w) html += `<span class="word">${w}</span> ` });
+    html += `<span style="color:var(--gold-antique); font-family:'Tajawal'; font-size:16px;"> ﴿${ayah.numberInSurah}﴾ </span> `;
+  });
+  container.innerHTML = html;
+}
+
+// معالجة الضغطات وحساب الدرجات الدقيق
+function handleInteraction(e) {
+  if (e.target.classList.contains("word")) {
+    const el = e.target;
+    if (el.classList.contains("t-1")) {
+      el.classList.replace("t-1", "t-2"); currentScore -= 3; playSound(600); // للتشكيل
+    } else if (el.classList.contains("t-2")) {
+      el.classList.replace("t-2", "t-3"); currentScore += 2; playSound(500); // للحفظ
+    } else if (el.classList.contains("t-3")) {
+      el.classList.remove("t-3"); currentScore += 2; playSound(300); // إلغاء
+    } else {
+      el.classList.add("t-1"); currentScore -= 1; playSound(440); // للتجويد
+    }
+    updateScoreUI();
+  }
+}
+
+function updateScoreUI() {
+  if(currentScore < 0) currentScore = 0;
+  document.getElementById("liveScore").innerText = `💯 الدرجة: ${currentScore}`;
+}
+
+// التعديل هنا: دالة مساعدة لجلب الكلمة مع سياقها (الكلمة السابقة والتالية)
+function getWordWithContext(element) {
+  let prev = element.previousElementSibling;
+  let next = element.nextElementSibling;
+  
+  let prevText = (prev && prev.classList.contains("word")) ? prev.innerText.trim() : "";
+  let nextText = (next && next.classList.contains("word")) ? next.innerText.trim() : "";
+  let currentText = element.innerText.trim();
+  
+  let result = "";
+  if (prevText) result += prevText + " ";
+  result += "(" + currentText + ")";
+  if (nextText) result += " " + nextText;
+  
+  return result;
+}
+
+function addSurahToSession() {
+  if (!currentSurahName) return alert("الرجاء اختيار سورة أولاً.");
+  const start = document.getElementById("startAyah").value;
+  const end = document.getElementById("endAyah").value;
+  const evaluation = document.getElementById("surahEvaluation").value; // أخذ التقييم
+
+  sessionData.push({
+    name: currentSurahName, range: `الآيات ${start}-${end}`, score: currentScore,
+    evaluation: evaluation, // حفظ التقييم
+    errors: {
+      // التعديل هنا: استخدام الدالة الجديدة لجلب الكلمات الخاطئة بسياقها
+      tajweed: Array.from(document.querySelectorAll(".t-1")).map(w => getWordWithContext(w)),
+      tashkeel: Array.from(document.querySelectorAll(".t-2")).map(w => getWordWithContext(w)),
+      hifz: Array.from(document.querySelectorAll(".t-3")).map(w => getWordWithContext(w))
+    }
+  });
+
+  const summaryBox = document.getElementById("sessionSummary");
+  const list = document.getElementById("surahList");
+  summaryBox.style.display = "block";
+  list.innerHTML = sessionData.map((s) => `<li>✔️ ${s.name} (${s.range}) - <strong>${s.score}%</strong> [${s.evaluation}]</li>`).join("");
+
+  document.getElementById("surahSearch").value = "";
+  document.getElementById("rangeSelector").style.display = "none";
+  document.getElementById("quranContainer").innerHTML = "تم حفظ السورة بنجاح! ✅<br>اختر سورة أخرى أو أرسل التقرير.";
+  document.getElementById("surahEvaluation").value = "ممتاز"; // تصفير التقييم للوضع الافتراضي
+  currentSurahName = ""; currentScore = 100; updateScoreUI();
+}
+
+function finalSend() {
+  const name = document.getElementById("studentName").value;
+  const notes = document.getElementById("notes").value || "لا يوجد";
+  const next = document.getElementById("nextLesson").value || "مراجعة ما سبق";
+
+  if (!name || sessionData.length === 0) return alert("أدخل اسم الطالب وأضف سورة واحدة على الأقل.");
+
+  const totalScore = Math.round(sessionData.reduce((sum, s) => sum + s.score, 0) / sessionData.length);
+  if (totalScore >= 90) confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+
+  // بناء الرسالة النهائية
+  let msg = `*✨ تقرير حلقة القرآن الكريم ✨*%0a--------------------%0a*👤 الطالب:* ${name}%0a*🏆 التقييم العام:* ${totalScore}/100%0a%0a*📖 السور المسمّعة:*%0a`;
+
+  sessionData.forEach((s, index) => {
+    // التعديل هنا: إضافة التقييم الخاص بكل سورة للواتساب
+    msg += `%0a*${index + 1}️⃣ ${s.name}* (${s.range})%0a*التقييم:* ${s.evaluation}%0a*الدرجة:* ${s.score}/100%0a`;
+    if (s.errors.tashkeel.length > 0) msg += `🔴 تشكيل: ${s.errors.tashkeel.join("، ")}%0a`;
+    if (s.errors.hifz.length > 0) msg += `🟡 حفظ: ${s.errors.hifz.join("، ")}%0a`;
+    if (s.errors.tajweed.length > 0) msg += `🟢 تجويد: ${s.errors.tajweed.join("، ")}%0a`;
+    if (!s.errors.tashkeel.length && !s.errors.hifz.length && !s.errors.tajweed.length) msg += `✨ حفظ متقن ما شاء الله%0a`;
+  });
+
+  msg += `%0a--------------------%0a*📚 الواجب القادم:* ${next}%0a*📝 ملاحظات:* ${notes}%0a--------------------%0a*بارك الله فيكم*`;
+  window.open(`https://api.whatsapp.com/send?text=${msg}`, "_blank");
+
+  // تصفير وتنظيف كامل للبدء بطالب جديد فوراُ
+  document.getElementById("studentName").value = ""; 
+  document.getElementById("notes").value = ""; 
+  document.getElementById("nextLesson").value = "";
+  document.getElementById("sessionSummary").style.display = "none";
+  document.getElementById("surahEvaluation").value = "ممتاز";
+  document.getElementById("quranContainer").innerHTML = "اختر سورة لبدء التسميع..";
+  sessionData = []; 
+}
+</script>
+</body>
+</html>
