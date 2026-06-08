@@ -104,8 +104,7 @@
 
         <label>📖 ابحث عن السورة:</label>
         <div style="position:relative">
-            <!-- محرك البحث الجديد باستخدام القائمة المنسدلة المدمجة (يظهر فور كتابة أي حرف) -->
-            <input type="text" id="surahSearch" list="surahsData" placeholder="اكتب اسم السورة أو اختر من القائمة..." oninput="checkSurahSelection()">
+            <input type="text" id="surahSearch" list="surahsData" placeholder="اكتب الفلق، البقرة..." oninput="checkSurahSelection()">
             <datalist id="surahsData"></datalist>
         </div>
 
@@ -126,12 +125,10 @@
             اختر سورة لبدء التسميع..
         </div>
         
-        <!-- دليل المعلم للأخطاء -->
         <div style="text-align:center; font-size:13px; margin-top:10px; font-weight:bold; color:var(--text-color);">
             💡 ضغطة: <span style="color:var(--tajweed-green)">🟢 تجويد (-1)</span> | ضغطتان: <span style="color:var(--error-red)">🔴 تشكيل (-4)</span> | 3 ضغطات: <span style="color:var(--hifz-yellow)">🟡 حفظ (-2)</span>
         </div>
 
-        <!-- التعديل هنا: إضافة تقييم السورة -->
         <label>⭐ تقييم تسميع السورة:</label>
         <select id="surahEvaluation" style="margin-bottom: 10px;">
             <option value="ممتاز">ممتاز</option>
@@ -160,7 +157,16 @@
 let allSurahs = [], currentAyahs = [], sessionData = [];
 let currentSurahName = "", currentScore = 100;
 
-// نظام الصوت الفوري للضغطات
+// --- دالة التنظيف الجديدة: تزيل التشكيل وكلمة سورة لتسهيل البحث ---
+function cleanSurahName(name) {
+    return name
+        .replace(/[\u0617-\u061A\u064B-\u0652\u0670]/g, "") // إزالة التشكيل والألف الخنجرية
+        .replace(/سُورَةُ /g, "") // إزالة كلمة سُورَةُ بالتشكيل
+        .replace(/سورة /g, "") // إزالة كلمة سورة بدون تشكيل
+        .replace(/ٱ/g, "ا") // توحيد همزة الوصل
+        .replace(/[أإآ]/g, "ا"); // توحيد الهمزات
+}
+
 const playSound = (freq) => {
   const ctx = new (window.AudioContext || window.webkitAudioContext)();
   const osc = ctx.createOscillator();
@@ -172,21 +178,26 @@ const playSound = (freq) => {
   osc.start(); osc.stop(ctx.currentTime + 0.1);
 };
 
-// جلب السور من السيرفر وتعبئة القائمة المنسدلة الذكية
 async function fetchSurahs() {
   const res = await fetch("https://api.alquran.cloud/v1/surah");
   const data = await res.json();
-  allSurahs = data.data;
+  
+  // إضافة الاسم النظيف للمصفوفة لاستخدامه في البحث
+  allSurahs = data.data.map(surah => ({
+      ...surah,
+      cleanName: cleanSurahName(surah.name)
+  }));
   
   const datalist = document.getElementById("surahsData");
-  datalist.innerHTML = allSurahs.map(s => `<option value="${s.name}">`).join("");
+  // عرض الاسم النظيف للمستخدم في القائمة
+  datalist.innerHTML = allSurahs.map(s => `<option value="${s.cleanName}">`).join("");
 }
 fetchSurahs();
 
-// دالة فحص الاختيار التلقائي للسورة من القائمة
 function checkSurahSelection() {
   const val = document.getElementById("surahSearch").value;
-  const foundSurah = allSurahs.find(s => s.name === val);
+  // مطابقة ما يكتبه المستخدم مع الاسم النظيف
+  const foundSurah = allSurahs.find(s => s.cleanName === val);
   
   if(foundSurah) {
       selectSurah(foundSurah.number, foundSurah.name);
@@ -224,18 +235,17 @@ function updateView() {
   container.innerHTML = html;
 }
 
-// معالجة الضغطات وحساب الدرجات الدقيق
 function handleInteraction(e) {
   if (e.target.classList.contains("word")) {
     const el = e.target;
     if (el.classList.contains("t-1")) {
-      el.classList.replace("t-1", "t-2"); currentScore -= 3; playSound(600); // للتشكيل
+      el.classList.replace("t-1", "t-2"); currentScore -= 3; playSound(600); 
     } else if (el.classList.contains("t-2")) {
-      el.classList.replace("t-2", "t-3"); currentScore += 2; playSound(500); // للحفظ
+      el.classList.replace("t-2", "t-3"); currentScore += 2; playSound(500); 
     } else if (el.classList.contains("t-3")) {
-      el.classList.remove("t-3"); currentScore += 2; playSound(300); // إلغاء
+      el.classList.remove("t-3"); currentScore += 2; playSound(300); 
     } else {
-      el.classList.add("t-1"); currentScore -= 1; playSound(440); // للتجويد
+      el.classList.add("t-1"); currentScore -= 1; playSound(440); 
     }
     updateScoreUI();
   }
@@ -246,7 +256,6 @@ function updateScoreUI() {
   document.getElementById("liveScore").innerText = `💯 الدرجة: ${currentScore}`;
 }
 
-// التعديل هنا: دالة مساعدة لجلب الكلمة مع سياقها (الكلمة السابقة والتالية)
 function getWordWithContext(element) {
   let prev = element.previousElementSibling;
   let next = element.nextElementSibling;
@@ -267,13 +276,12 @@ function addSurahToSession() {
   if (!currentSurahName) return alert("الرجاء اختيار سورة أولاً.");
   const start = document.getElementById("startAyah").value;
   const end = document.getElementById("endAyah").value;
-  const evaluation = document.getElementById("surahEvaluation").value; // أخذ التقييم
+  const evaluation = document.getElementById("surahEvaluation").value; 
 
   sessionData.push({
     name: currentSurahName, range: `الآيات ${start}-${end}`, score: currentScore,
-    evaluation: evaluation, // حفظ التقييم
+    evaluation: evaluation, 
     errors: {
-      // التعديل هنا: استخدام الدالة الجديدة لجلب الكلمات الخاطئة بسياقها
       tajweed: Array.from(document.querySelectorAll(".t-1")).map(w => getWordWithContext(w)),
       tashkeel: Array.from(document.querySelectorAll(".t-2")).map(w => getWordWithContext(w)),
       hifz: Array.from(document.querySelectorAll(".t-3")).map(w => getWordWithContext(w))
@@ -288,7 +296,7 @@ function addSurahToSession() {
   document.getElementById("surahSearch").value = "";
   document.getElementById("rangeSelector").style.display = "none";
   document.getElementById("quranContainer").innerHTML = "تم حفظ السورة بنجاح! ✅<br>اختر سورة أخرى أو أرسل التقرير.";
-  document.getElementById("surahEvaluation").value = "ممتاز"; // تصفير التقييم للوضع الافتراضي
+  document.getElementById("surahEvaluation").value = "ممتاز"; 
   currentSurahName = ""; currentScore = 100; updateScoreUI();
 }
 
@@ -302,11 +310,9 @@ function finalSend() {
   const totalScore = Math.round(sessionData.reduce((sum, s) => sum + s.score, 0) / sessionData.length);
   if (totalScore >= 90) confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
 
-  // بناء الرسالة النهائية
   let msg = `*✨ تقرير حلقة القرآن الكريم ✨*%0a--------------------%0a*👤 الطالب:* ${name}%0a*🏆 التقييم العام:* ${totalScore}/100%0a%0a*📖 السور المسمّعة:*%0a`;
 
   sessionData.forEach((s, index) => {
-    // التعديل هنا: إضافة التقييم الخاص بكل سورة للواتساب
     msg += `%0a*${index + 1}️⃣ ${s.name}* (${s.range})%0a*التقييم:* ${s.evaluation}%0a*الدرجة:* ${s.score}/100%0a`;
     if (s.errors.tashkeel.length > 0) msg += `🔴 تشكيل: ${s.errors.tashkeel.join("، ")}%0a`;
     if (s.errors.hifz.length > 0) msg += `🟡 حفظ: ${s.errors.hifz.join("، ")}%0a`;
@@ -317,7 +323,6 @@ function finalSend() {
   msg += `%0a--------------------%0a*📚 الواجب القادم:* ${next}%0a*📝 ملاحظات:* ${notes}%0a--------------------%0a*بارك الله فيكم*`;
   window.open(`https://api.whatsapp.com/send?text=${msg}`, "_blank");
 
-  // تصفير وتنظيف كامل للبدء بطالب جديد فوراُ
   document.getElementById("studentName").value = ""; 
   document.getElementById("notes").value = ""; 
   document.getElementById("nextLesson").value = "";
