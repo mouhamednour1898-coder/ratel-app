@@ -37,12 +37,6 @@
         }
 
         header h1 { font-family: 'Amiri Quran', serif; margin: 0; font-size: 36px; }
-        
-        .score-panel { display: flex; justify-content: center; gap: 15px; margin-top: 15px; }
-        #liveScore {
-            font-size: 15px; background: rgba(0,0,0,0.3); padding: 6px 12px; 
-            border-radius: 20px; border: 1px solid var(--gold-antique); color: var(--gold-light); font-weight: bold;
-        }
 
         .content { padding: 25px; text-align: right; color: var(--text-color); }
         label { display: block; margin-top: 15px; font-weight: bold; color: var(--gold-deep); font-size: 14px; }
@@ -93,9 +87,6 @@
     <header>
         <h1>رتّل</h1>
         <p style="margin: 10px 0 0 0; font-size: 18px; font-family: 'Amiri Quran', serif;">خَيْرُكُمْ مَنْ تَعَلَّمَ الْقُرْآنَ وَعَلَّمَهُ</p>
-        <div class="score-panel">
-            <div id="liveScore">💯 الدرجة: 100</div>
-        </div>
     </header>
 
     <div class="content">
@@ -126,12 +117,14 @@
         </div>
         
         <div style="text-align:center; font-size:13px; margin-top:10px; font-weight:bold; color:var(--text-color);">
-            💡 ضغطة: <span style="color:var(--tajweed-green)">🟢 تجويد (-1)</span> | ضغطتان: <span style="color:var(--error-red)">🔴 تشكيل (-4)</span> | 3 ضغطات: <span style="color:var(--hifz-yellow)">🟡 حفظ (-2)</span>
+            💡 ضغطة: <span style="color:var(--tajweed-green)">🟢 تجويد</span> | ضغطتان: <span style="color:var(--error-red)">🔴 تشكيل</span> | 3 ضغطات: <span style="color:var(--hifz-yellow)">🟡 حفظ</span>
         </div>
 
         <label>⭐ تقييم تسميع السورة:</label>
         <select id="surahEvaluation" style="margin-bottom: 10px;">
             <option value="ممتاز">ممتاز</option>
+            <option value="جيد جدا">جيد جدا</option>
+            <option value="جيد">جيد</option>
             <option value="مقبول">مقبول</option>
             <option value="إعادة">إعادة</option>
         </select>
@@ -155,16 +148,15 @@
 
 <script>
 let allSurahs = [], currentAyahs = [], sessionData = [];
-let currentSurahName = "", currentScore = 100;
+let currentSurahName = "";
 
-// --- دالة التنظيف الجديدة: تزيل التشكيل وكلمة سورة لتسهيل البحث ---
 function cleanSurahName(name) {
     return name
-        .replace(/[\u0617-\u061A\u064B-\u0652\u0670]/g, "") // إزالة التشكيل والألف الخنجرية
-        .replace(/سُورَةُ /g, "") // إزالة كلمة سُورَةُ بالتشكيل
-        .replace(/سورة /g, "") // إزالة كلمة سورة بدون تشكيل
-        .replace(/ٱ/g, "ا") // توحيد همزة الوصل
-        .replace(/[أإآ]/g, "ا"); // توحيد الهمزات
+        .replace(/[\u0617-\u061A\u064B-\u0652\u0670]/g, "") 
+        .replace(/سُورَةُ /g, "") 
+        .replace(/سورة /g, "") 
+        .replace(/ٱ/g, "ا") 
+        .replace(/[أإآ]/g, "ا"); 
 }
 
 const playSound = (freq) => {
@@ -182,21 +174,18 @@ async function fetchSurahs() {
   const res = await fetch("https://api.alquran.cloud/v1/surah");
   const data = await res.json();
   
-  // إضافة الاسم النظيف للمصفوفة لاستخدامه في البحث
   allSurahs = data.data.map(surah => ({
       ...surah,
       cleanName: cleanSurahName(surah.name)
   }));
   
   const datalist = document.getElementById("surahsData");
-  // عرض الاسم النظيف للمستخدم في القائمة
   datalist.innerHTML = allSurahs.map(s => `<option value="${s.cleanName}">`).join("");
 }
 fetchSurahs();
 
 function checkSurahSelection() {
   const val = document.getElementById("surahSearch").value;
-  // مطابقة ما يكتبه المستخدم مع الاسم النظيف
   const foundSurah = allSurahs.find(s => s.cleanName === val);
   
   if(foundSurah) {
@@ -218,8 +207,7 @@ async function selectSurah(num, name) {
   endSelect.value = currentAyahs.length;
 
   document.getElementById("rangeSelector").style.display = "block";
-  currentScore = 100;
-  updateScoreUI(); updateView();
+  updateView();
 }
 
 function updateView() {
@@ -239,21 +227,15 @@ function handleInteraction(e) {
   if (e.target.classList.contains("word")) {
     const el = e.target;
     if (el.classList.contains("t-1")) {
-      el.classList.replace("t-1", "t-2"); currentScore -= 3; playSound(600); 
+      el.classList.replace("t-1", "t-2"); playSound(600); 
     } else if (el.classList.contains("t-2")) {
-      el.classList.replace("t-2", "t-3"); currentScore += 2; playSound(500); 
+      el.classList.replace("t-2", "t-3"); playSound(500); 
     } else if (el.classList.contains("t-3")) {
-      el.classList.remove("t-3"); currentScore += 2; playSound(300); 
+      el.classList.remove("t-3"); playSound(300); 
     } else {
-      el.classList.add("t-1"); currentScore -= 1; playSound(440); 
+      el.classList.add("t-1"); playSound(440); 
     }
-    updateScoreUI();
   }
-}
-
-function updateScoreUI() {
-  if(currentScore < 0) currentScore = 0;
-  document.getElementById("liveScore").innerText = `💯 الدرجة: ${currentScore}`;
 }
 
 function getWordWithContext(element) {
@@ -279,7 +261,7 @@ function addSurahToSession() {
   const evaluation = document.getElementById("surahEvaluation").value; 
 
   sessionData.push({
-    name: currentSurahName, range: `الآيات ${start}-${end}`, score: currentScore,
+    name: currentSurahName, range: `الآيات ${start}-${end}`,
     evaluation: evaluation, 
     errors: {
       tajweed: Array.from(document.querySelectorAll(".t-1")).map(w => getWordWithContext(w)),
@@ -291,13 +273,13 @@ function addSurahToSession() {
   const summaryBox = document.getElementById("sessionSummary");
   const list = document.getElementById("surahList");
   summaryBox.style.display = "block";
-  list.innerHTML = sessionData.map((s) => `<li>✔️ ${s.name} (${s.range}) - <strong>${s.score}%</strong> [${s.evaluation}]</li>`).join("");
+  list.innerHTML = sessionData.map((s) => `<li>✔️ ${s.name} (${s.range}) - [${s.evaluation}]</li>`).join("");
 
   document.getElementById("surahSearch").value = "";
   document.getElementById("rangeSelector").style.display = "none";
   document.getElementById("quranContainer").innerHTML = "تم حفظ السورة بنجاح! ✅<br>اختر سورة أخرى أو أرسل التقرير.";
   document.getElementById("surahEvaluation").value = "ممتاز"; 
-  currentSurahName = ""; currentScore = 100; updateScoreUI();
+  currentSurahName = "";
 }
 
 function finalSend() {
@@ -307,17 +289,15 @@ function finalSend() {
 
   if (!name || sessionData.length === 0) return alert("أدخل اسم الطالب وأضف سورة واحدة على الأقل.");
 
-  const totalScore = Math.round(sessionData.reduce((sum, s) => sum + s.score, 0) / sessionData.length);
-  if (totalScore >= 90) confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+  confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
 
-  let msg = `*✨ تقرير حلقة القرآن الكريم ✨*%0a--------------------%0a*👤 الطالب:* ${name}%0a*🏆 التقييم العام:* ${totalScore}/100%0a%0a*📖 السور المسمّعة:*%0a`;
+  let msg = `*✨ تقرير حلقة القرآن الكريم ✨*%0a--------------------%0a*👤 الطالب:* ${name}%0a%0a*📖 السور المسمّعة:*%0a`;
 
   sessionData.forEach((s, index) => {
-    msg += `%0a*${index + 1}️⃣ ${s.name}* (${s.range})%0a*التقييم:* ${s.evaluation}%0a*الدرجة:* ${s.score}/100%0a`;
+    msg += `%0a*${index + 1}️⃣ ${s.name}* (${s.range})%0a*التقييم:* ${s.evaluation}%0a`;
     if (s.errors.tashkeel.length > 0) msg += `🔴 تشكيل: ${s.errors.tashkeel.join("، ")}%0a`;
     if (s.errors.hifz.length > 0) msg += `🟡 حفظ: ${s.errors.hifz.join("، ")}%0a`;
     if (s.errors.tajweed.length > 0) msg += `🟢 تجويد: ${s.errors.tajweed.join("، ")}%0a`;
-    if (!s.errors.tashkeel.length && !s.errors.hifz.length && !s.errors.tajweed.length) msg += `✨ حفظ متقن ما شاء الله%0a`;
   });
 
   msg += `%0a--------------------%0a*📚 الواجب القادم:* ${next}%0a*📝 ملاحظات:* ${notes}%0a--------------------%0a*بارك الله فيكم*`;
