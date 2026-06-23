@@ -64,6 +64,9 @@
         .t-2 { background-color: var(--error-red) !important; color: white !important; } 
         .t-3 { background-color: var(--hifz-yellow) !important; color: black !important; } 
 
+        .ayah-icon { cursor: pointer; font-size: 18px; margin: 0 5px; transition: 0.2s; display: inline-block; }
+        .ayah-icon:hover { transform: scale(1.2); }
+
         .btn-add-surah {
             background: rgba(197, 160, 89, 0.15); border: 1px dashed var(--gold-antique);
             color: var(--text-color); width: 100%; padding: 12px; border-radius: 12px;
@@ -79,6 +82,21 @@
             width: 100%; cursor: pointer; font-size: 18px; font-weight: bold; margin-top: 20px;
             box-shadow: 0 8px 15px rgba(0,0,0,0.1); font-family: 'Tajawal';
         }
+
+        /* نافذة التفسير المنبثقة */
+        .modal { 
+            display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; 
+            background-color: rgba(0,0,0,0.6); justify-content: center; align-items: center; backdrop-filter: blur(5px);
+        }
+        .modal-content { 
+            background: var(--card-bg); padding: 25px; border-radius: 20px; max-width: 90%; width: 400px; 
+            text-align: right; box-shadow: 0 10px 30px rgba(0,0,0,0.3); border: 2px solid var(--gold-antique); position: relative;
+        }
+        .close-btn { 
+            background: var(--error-red); color: white; border: none; padding: 6px 12px; border-radius: 8px; 
+            cursor: pointer; position: absolute; left: 15px; top: 15px; font-family: 'Tajawal'; font-weight: bold;
+        }
+        .tafsir-text { margin-top: 20px; font-size: 16px; line-height: 1.8; color: var(--text-color); }
     </style>
 </head>
 <body>
@@ -118,6 +136,7 @@
         
         <div style="text-align:center; font-size:13px; margin-top:10px; font-weight:bold; color:var(--text-color);">
             💡 ضغطة: <span style="color:var(--tajweed-green)">🟢 تجويد</span> | ضغطتان: <span style="color:var(--error-red)">🔴 تشكيل</span> | 3 ضغطات: <span style="color:var(--hifz-yellow)">🟡 حفظ</span>
+            <br><span style="color:var(--gold-deep)">اضغط على 📖 للتفسير | اضغط على 🔊 للاستماع (العفاسي)</span>
         </div>
 
         <label>⭐ تقييم تسميع السورة:</label>
@@ -146,9 +165,18 @@
     </div>
 </div>
 
+<div id="tafsirModal" class="modal">
+    <div class="modal-content">
+        <button class="close-btn" onclick="closeTafsir()">إغلاق ✖</button>
+        <h3 id="tafsirTitle" style="color: var(--gold-deep); margin-top: 0;">التفسير الميسر</h3>
+        <div id="tafsirBody" class="tafsir-text">جاري التحميل...</div>
+    </div>
+</div>
+
 <script>
-let allSurahs = [], currentAyahs = [], sessionData = [];
+let allSurahs = [], currentAyahs = [], currentTafsirAyahs = [], sessionData = [];
 let currentSurahName = "";
+let currentAudio = null; // متغير لحفظ الصوت الحالي
 
 function cleanSurahName(name) {
     return name
@@ -196,9 +224,17 @@ function checkSurahSelection() {
 async function selectSurah(num, name) {
   currentSurahName = name;
 
-  const res = await fetch(`https://api.alquran.cloud/v1/surah/${num}`);
-  const data = await res.json();
-  currentAyahs = data.data.ayahs;
+  // جلب الآيات والتفسير معاً
+  const [resQuran, resTafsir] = await Promise.all([
+      fetch(`https://api.alquran.cloud/v1/surah/${num}`),
+      fetch(`https://api.alquran.cloud/v1/surah/${num}/ar.muyassar`)
+  ]);
+
+  const dataQuran = await resQuran.json();
+  const dataTafsir = await resTafsir.json();
+  
+  currentAyahs = dataQuran.data.ayahs;
+  currentTafsirAyahs = dataTafsir.data.ayahs;
 
   const startSelect = document.getElementById("startAyah");
   const endSelect = document.getElementById("endAyah");
@@ -218,9 +254,20 @@ function updateView() {
   let html = "";
   currentAyahs.slice(start, end).forEach((ayah) => {
     ayah.text.split(" ").forEach((w) => { if(w) html += `<span class="word">${w}</span> ` });
-    html += `<span style="color:var(--gold-antique); font-family:'Tajawal'; font-size:16px;"> ﴿${ayah.numberInSurah}﴾ </span> `;
+    // إضافة أيقونة التفسير وأيقونة الصوت بجانب رقم الآية
+    html += `<span style="color:var(--gold-antique); font-family:'Tajawal'; font-size:16px;"> ﴿${ayah.numberInSurah}﴾ <span class="ayah-icon" title="عرض التفسير" onclick="showTafsir(${ayah.numberInSurah - 1})">📖</span><span class="ayah-icon" title="استماع للآية" onclick="playAyahAudio(${ayah.number})">🔊</span></span> `;
   });
   container.innerHTML = html;
+}
+
+// دالة تشغيل الصوت
+function playAyahAudio(absoluteAyahNumber) {
+    if (currentAudio) {
+        currentAudio.pause(); // إيقاف الصوت السابق إذا كان يعمل
+    }
+    // إنشاء كائن صوت جديد وجلب صوت العفاسي للآية المحددة
+    currentAudio = new Audio(`https://cdn.islamic.network/quran/audio/128/ar.alafasy/${absoluteAyahNumber}.mp3`);
+    currentAudio.play();
 }
 
 function handleInteraction(e) {
@@ -236,6 +283,22 @@ function handleInteraction(e) {
       el.classList.add("t-1"); playSound(440); 
     }
   }
+}
+
+// دالة إظهار التفسير
+function showTafsir(index) {
+    if(!currentTafsirAyahs[index]) return;
+    const tafsirText = currentTafsirAyahs[index].text;
+    const ayahNum = index + 1;
+    
+    document.getElementById("tafsirTitle").innerText = `التفسير الميسر - الآية ﴿${ayahNum}﴾`;
+    document.getElementById("tafsirBody").innerText = tafsirText;
+    document.getElementById("tafsirModal").style.display = "flex";
+}
+
+// دالة إغلاق التفسير
+function closeTafsir() {
+    document.getElementById("tafsirModal").style.display = "none";
 }
 
 function getWordWithContext(element) {
@@ -280,6 +343,7 @@ function addSurahToSession() {
   document.getElementById("quranContainer").innerHTML = "تم حفظ السورة بنجاح! ✅<br>اختر سورة أخرى أو أرسل التقرير.";
   document.getElementById("surahEvaluation").value = "ممتاز"; 
   currentSurahName = "";
+  if(currentAudio) { currentAudio.pause(); currentAudio = null; } // إيقاف الصوت عند الانتقال
 }
 
 function finalSend() {
@@ -310,6 +374,7 @@ function finalSend() {
   document.getElementById("surahEvaluation").value = "ممتاز";
   document.getElementById("quranContainer").innerHTML = "اختر سورة لبدء التسميع..";
   sessionData = []; 
+  if(currentAudio) { currentAudio.pause(); currentAudio = null; } // إيقاف الصوت عند الإرسال
 }
 </script>
 </body>
