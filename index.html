@@ -109,7 +109,9 @@
 
     <div class="content">
         <label>👤 اسم الطالب:</label>
-        <input type="text" id="studentName" placeholder="أدخل اسم الطالب">
+        <input type="text" id="studentName" list="studentsList" placeholder="أدخل اسم الطالب" oninput="checkStudentSelection()" autocomplete="off">
+        <datalist id="studentsList"></datalist>
+        <div id="lastLessonNote" style="display:none; color: var(--gold-deep); font-size: 13px; margin-top: 5px; background: rgba(197, 160, 89, 0.1); padding: 8px; border-radius: 8px; border-right: 3px solid var(--gold-deep);"></div>
 
         <label>📖 ابحث عن السورة:</label>
         <div style="position:relative">
@@ -176,7 +178,27 @@
 <script>
 let allSurahs = [], currentAyahs = [], currentTafsirAyahs = [], sessionData = [];
 let currentSurahName = "";
-let currentAudio = null; // متغير لحفظ الصوت الحالي
+let currentAudio = null; 
+
+// استدعاء بيانات الطلاب من الذاكرة المحلية
+let studentsData = JSON.parse(localStorage.getItem('rattal_students')) || {};
+
+function updateStudentsList() {
+    const datalist = document.getElementById("studentsList");
+    datalist.innerHTML = Object.keys(studentsData).map(name => `<option value="${name}">`).join("");
+}
+updateStudentsList(); // تحديث القائمة عند تحميل الصفحة
+
+function checkStudentSelection() {
+    const name = document.getElementById("studentName").value;
+    const noteDiv = document.getElementById("lastLessonNote");
+    if (studentsData[name] && studentsData[name].lastLesson) {
+        noteDiv.innerHTML = `📌 <b>الواجب السابق:</b> ${studentsData[name].lastLesson}`;
+        noteDiv.style.display = "block";
+    } else {
+        noteDiv.style.display = "none";
+    }
+}
 
 function cleanSurahName(name) {
     return name
@@ -224,7 +246,6 @@ function checkSurahSelection() {
 async function selectSurah(num, name) {
   currentSurahName = name;
 
-  // جلب الآيات والتفسير معاً
   const [resQuran, resTafsir] = await Promise.all([
       fetch(`https://api.alquran.cloud/v1/surah/${num}`),
       fetch(`https://api.alquran.cloud/v1/surah/${num}/ar.muyassar`)
@@ -254,18 +275,15 @@ function updateView() {
   let html = "";
   currentAyahs.slice(start, end).forEach((ayah) => {
     ayah.text.split(" ").forEach((w) => { if(w) html += `<span class="word">${w}</span> ` });
-    // إضافة أيقونة التفسير وأيقونة الصوت بجانب رقم الآية
     html += `<span style="color:var(--gold-antique); font-family:'Tajawal'; font-size:16px;"> ﴿${ayah.numberInSurah}﴾ <span class="ayah-icon" title="عرض التفسير" onclick="showTafsir(${ayah.numberInSurah - 1})">📖</span><span class="ayah-icon" title="استماع للآية" onclick="playAyahAudio(${ayah.number})">🔊</span></span> `;
   });
   container.innerHTML = html;
 }
 
-// دالة تشغيل الصوت
 function playAyahAudio(absoluteAyahNumber) {
     if (currentAudio) {
-        currentAudio.pause(); // إيقاف الصوت السابق إذا كان يعمل
+        currentAudio.pause(); 
     }
-    // إنشاء كائن صوت جديد وجلب صوت العفاسي للآية المحددة
     currentAudio = new Audio(`https://cdn.islamic.network/quran/audio/128/ar.alafasy/${absoluteAyahNumber}.mp3`);
     currentAudio.play();
 }
@@ -285,7 +303,6 @@ function handleInteraction(e) {
   }
 }
 
-// دالة إظهار التفسير
 function showTafsir(index) {
     if(!currentTafsirAyahs[index]) return;
     const tafsirText = currentTafsirAyahs[index].text;
@@ -296,7 +313,6 @@ function showTafsir(index) {
     document.getElementById("tafsirModal").style.display = "flex";
 }
 
-// دالة إغلاق التفسير
 function closeTafsir() {
     document.getElementById("tafsirModal").style.display = "none";
 }
@@ -343,7 +359,7 @@ function addSurahToSession() {
   document.getElementById("quranContainer").innerHTML = "تم حفظ السورة بنجاح! ✅<br>اختر سورة أخرى أو أرسل التقرير.";
   document.getElementById("surahEvaluation").value = "ممتاز"; 
   currentSurahName = "";
-  if(currentAudio) { currentAudio.pause(); currentAudio = null; } // إيقاف الصوت عند الانتقال
+  if(currentAudio) { currentAudio.pause(); currentAudio = null; } 
 }
 
 function finalSend() {
@@ -353,6 +369,11 @@ function finalSend() {
 
   if (!name || sessionData.length === 0) return alert("أدخل اسم الطالب وأضف سورة واحدة على الأقل.");
 
+  // حفظ اسم الطالب ووظيفته في الذاكرة المحلية
+  studentsData[name] = { lastLesson: next };
+  localStorage.setItem('rattal_students', JSON.stringify(studentsData));
+  updateStudentsList(); // تحديث القائمة فوراً
+  
   confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
 
   let msg = `*✨ تقرير حلقة القرآن الكريم ✨*%0a--------------------%0a*👤 الطالب:* ${name}%0a%0a*📖 السور المسمّعة:*%0a`;
@@ -367,14 +388,16 @@ function finalSend() {
   msg += `%0a--------------------%0a*📚 الواجب القادم:* ${next}%0a*📝 ملاحظات:* ${notes}%0a--------------------%0a*بارك الله فيكم*`;
   window.open(`https://api.whatsapp.com/send?text=${msg}`, "_blank");
 
+  // إعادة ضبط النموذج
   document.getElementById("studentName").value = ""; 
   document.getElementById("notes").value = ""; 
   document.getElementById("nextLesson").value = "";
   document.getElementById("sessionSummary").style.display = "none";
   document.getElementById("surahEvaluation").value = "ممتاز";
   document.getElementById("quranContainer").innerHTML = "اختر سورة لبدء التسميع..";
+  document.getElementById("lastLessonNote").style.display = "none";
   sessionData = []; 
-  if(currentAudio) { currentAudio.pause(); currentAudio = null; } // إيقاف الصوت عند الإرسال
+  if(currentAudio) { currentAudio.pause(); currentAudio = null; } 
 }
 </script>
 </body>
